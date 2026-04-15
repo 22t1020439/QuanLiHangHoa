@@ -1,46 +1,42 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'screens/product_screen.dart';
+import 'screens/supplier_screen.dart';
+import 'screens/transaction_screen.dart';
+import 'models/product_model.dart';
+import 'services/firestore_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
-        apiKey: "AIzaSyDMC2mgA28jKAP6cKSDdX8qw7-lsThqXSQ",
+        apiKey: "AIzaSyBh7FoVWJs3pMDPDjC07-IW7xG1XPMOZN0",
         appId: "1:778899215488:web:39d3fd024fe1db5b8f4265",
         messagingSenderId: "778899215488",
         projectId: "inventory-app-276db",
         authDomain: "inventory-app-276db.firebaseapp.com",
         storageBucket: "inventory-app-276db.firebasestorage.app",
-        measurementId: "G-Q8QGJG914P",
+        // measurementId: "G-Q8QGJG914P", // Bỏ đo lường nếu gây lỗi build web
       ),
     );
+
+    // Tạm thời tắt Persistence để kiểm tra lỗi build
+    /*
+    if (kIsWeb) {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+      );
+    }
+    */
+
     runApp(const InventoryApp());
   } catch (e) {
     runApp(
       MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 64),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Lỗi khởi tạo ứng dụng",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(e.toString(), textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          ),
-        ),
+        home: Scaffold(body: Center(child: Text("Lỗi khởi tạo: $e"))),
       ),
     );
   }
@@ -58,203 +54,173 @@ class InventoryApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const InventoryHomePage(),
+      home: const MainNavigationScreen(),
     );
   }
 }
 
-class InventoryHomePage extends StatefulWidget {
-  const InventoryHomePage({super.key});
+class MainNavigationScreen extends StatefulWidget {
+  const MainNavigationScreen({super.key});
 
   @override
-  State<InventoryHomePage> createState() => _InventoryHomePageState();
+  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _InventoryHomePageState extends State<InventoryHomePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _quantityController = TextEditingController();
-  final CollectionReference _items = FirebaseFirestore.instance.collection(
-    'items',
-  );
+class _MainNavigationScreenState extends State<MainNavigationScreen> {
+  int _selectedIndex = 0;
 
-  Future<void> _addOrUpdateItem([DocumentSnapshot? documentSnapshot]) async {
-    String action = 'create';
-    if (documentSnapshot != null) {
-      action = 'update';
-      _nameController.text = documentSnapshot['name'];
-      _quantityController.text = documentSnapshot['quantity'].toString();
-    }
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (BuildContext ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            top: 20,
-            left: 20,
-            right: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                action == 'create' ? "Thêm sản phẩm mới" : "Cập nhật sản phẩm",
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Tên sản phẩm',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _quantityController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Số lượng',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: Text(action == 'create' ? 'Thêm ngay' : 'Cập nhật'),
-                  onPressed: () async {
-                    final String name = _nameController.text.trim();
-                    final int? quantity = int.tryParse(
-                      _quantityController.text,
-                    );
-
-                    if (name.isNotEmpty && quantity != null) {
-                      if (action == 'create') {
-                        await _items.add({"name": name, "quantity": quantity});
-                      } else {
-                        await _items.doc(documentSnapshot!.id).update({
-                          "name": name,
-                          "quantity": quantity,
-                        });
-                      }
-                      _nameController.text = '';
-                      _quantityController.text = '';
-                      if (mounted) Navigator.of(context).pop();
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _deleteItem(String productId) async {
-    await _items.doc(productId).delete();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã xóa sản phẩm thành công')),
-      );
-    }
-  }
+  final List<Widget> _screens = [
+    const HomeScreen(),
+    const ProductScreen(type: ProductType.dong),
+    const ProductScreen(type: ProductType.noiBo),
+    const SupplierScreen(),
+    const TransactionScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) =>
+            setState(() => _selectedIndex = index),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home), label: 'Tổng quan'),
+          NavigationDestination(
+            icon: Icon(Icons.inventory),
+            label: 'Hàng Đà Nẵng',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2),
+            label: 'Hàng Nội Bộ',
+          ),
+          NavigationDestination(icon: Icon(Icons.business), label: 'NCC'),
+          NavigationDestination(
+            icon: Icon(Icons.swap_horiz),
+            label: 'Nhập/Xuất',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final FirestoreService service = FirestoreService();
+
+    return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Kho Hàng Thông Minh",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Kho Hàng Thông Minh'),
         centerTitle: true,
       ),
-      body: StreamBuilder(
-        stream: _items.snapshots(),
-        builder: (context, AsyncSnapshot<QuerySnapshot> streamSnapshot) {
-          if (streamSnapshot.hasError) {
-            return const Center(child: Text('Lỗi kết nối dữ liệu!'));
-          }
-          if (streamSnapshot.connectionState == ConnectionState.waiting) {
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: service.getDashboardStats(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!streamSnapshot.hasData || streamSnapshot.data!.docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 80,
-                    color: Colors.grey[300],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Chưa có sản phẩm nào trong kho",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
+          final stats =
+              snapshot.data ??
+              {'totalItems': 0, 'lowStockCount': 0, 'totalStock': 0};
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: streamSnapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              final DocumentSnapshot documentSnapshot =
-                  streamSnapshot.data!.docs[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer,
-                    child: Text("${index + 1}"),
-                  ),
-                  title: Text(
-                    documentSnapshot['name'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    "Số lượng tồn: ${documentSnapshot['quantity']}",
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _addOrUpdateItem(documentSnapshot),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: () => _deleteItem(documentSnapshot.id),
-                      ),
-                    ],
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tổng quan kho hàng',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                GridView.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 15,
+                  mainAxisSpacing: 15,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _buildStatCard(
+                      'Sản phẩm',
+                      stats['totalItems'].toString(),
+                      Icons.inventory,
+                      Colors.blue,
+                    ),
+                    _buildStatCard(
+                      'Tồn kho thấp',
+                      stats['lowStockCount'].toString(),
+                      Icons.warning_amber_rounded,
+                      stats['lowStockCount'] > 0 ? Colors.red : Colors.green,
+                    ),
+                    _buildStatCard(
+                      'Tổng số lượng',
+                      stats['totalStock'].toString(),
+                      Icons.summarize,
+                      Colors.orange,
+                    ),
+                    _buildStatCard(
+                      'Hệ thống',
+                      'Ổn định',
+                      Icons.check_circle,
+                      Colors.green,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+                const Text(
+                  'Trạng thái kết nối',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.cloud_done, color: Colors.green),
+                    title: const Text('Firebase Cloud Firestore'),
+                    subtitle: const Text('Đã kết nối thời gian thực'),
+                    trailing: const Text('v1.0.0'),
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addOrUpdateItem(),
-        label: const Text("Thêm hàng"),
-        icon: const Icon(Icons.add),
+    );
+  }
+
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 40, color: color),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
