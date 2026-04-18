@@ -166,6 +166,20 @@ class HomeScreen extends StatelessWidget {
                     trailing: const Text('v1.1.0'),
                   ),
                 ),
+                const SizedBox(height: 40),
+                // Footer
+                const Divider(),
+                const SizedBox(height: 10),
+                const Text(
+                  'Copyright © 2026 Phát triển bởi Trần Đại Thành',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           );
