@@ -39,62 +39,72 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     final q = query.toLowerCase();
 
     try {
-      if (q.contains('xuất') && (q.contains('đà nẵng') || q.contains('đn'))) {
-        response = await _handleStatsQuery(
+      // 1. Phân loại sản phẩm (Đà Nẵng hay Nội Bộ)
+      ProductType? pType;
+      if (q.contains('đà nẵng') || q.contains('đn')) {
+        pType = ProductType.dong;
+      } else if (q.contains('nội bộ') || q.contains('nb')) {
+        pType = ProductType.noiBo;
+      }
+
+      // 2. Xác định hành động (Xuất, Nhập, Tồn kho)
+      if (q.contains('xuất') || q.contains('bán')) {
+        response = await _handleTransactionQuery(
           q,
           TransactionType.export,
-          ProductType.dong,
+          pType,
         );
-      } else if (q.contains('xuất') && q.contains('nội bộ')) {
-        response = await _handleStatsQuery(
-          q,
-          TransactionType.export,
-          ProductType.noiBo,
-        );
-      } else if (q.contains('nhập') &&
-          (q.contains('đà nẵng') || q.contains('đn'))) {
-        response = await _handleStatsQuery(
+      } else if (q.contains('nhập') || q.contains('mua')) {
+        response = await _handleTransactionQuery(
           q,
           TransactionType.import,
-          ProductType.dong,
-        );
-      } else if (q.contains('nhập') && q.contains('nội bộ')) {
-        response = await _handleStatsQuery(
-          q,
-          TransactionType.import,
-          ProductType.noiBo,
+          pType,
         );
       } else if (q.contains('sắp hết') ||
           q.contains('cảnh báo') ||
-          q.contains('tồn kho thấp')) {
+          q.contains('tồn kho thấp') ||
+          q.contains('hết hàng')) {
         response = await _handleLowStockQuery();
+      } else if (q.contains('số loại') ||
+          q.contains('có bao nhiêu loại') ||
+          q.contains('mặt hàng')) {
+        response = await _handleTypeCountQuery(pType);
       } else if (q.contains('tổng') ||
           q.contains('bao nhiêu') ||
           q.contains('tồn kho')) {
-        response = await _handleTotalStockQuery(q);
+        response = await _handleStockSumQuery(pType);
       } else {
         response =
-            "Xin lỗi, tôi chưa hiểu yêu cầu của bạn. Bạn có thể hỏi ví dụ: 'Lượng hàng xuất Đà Nẵng tháng 3/2026', 'Tổng số lượng hàng Đà Nẵng' hoặc 'Sản phẩm nào sắp hết hàng?'";
+            "Xin lỗi, tôi chưa hiểu rõ ý bạn. Bạn có thể thử hỏi:\n- 'Số loại sản phẩm của hàng Đà Nẵng'\n- 'Tổng số lượng hàng nội bộ'\n- 'Hàng xuất Đà Nẵng ngày 17/4/2026'\n- 'Sản phẩm nào sắp hết hàng?'";
       }
     } catch (e) {
-      response = "Có lỗi xảy ra khi truy vấn dữ liệu: $e";
+      response = "Có lỗi xảy ra khi xử lý câu hỏi: $e";
     }
 
     _addMessage('assistant', response);
     setState(() => _isLoading = false);
   }
 
-  Future<String> _handleStatsQuery(
+  Future<String> _handleTransactionQuery(
     String q,
     TransactionType txType,
-    ProductType pType,
+    ProductType? pType,
   ) async {
-    // Regex tìm tháng/năm
+    if (pType == null)
+      return "Bạn muốn xem hàng xuất/nhập của 'Đà Nẵng' hay 'Nội bộ' ạ?";
+
+    // Regex phân tích thời gian
+    final dayRegex = RegExp(r'ngày (\d{1,2})');
     final monthRegex = RegExp(r'tháng (\d{1,2})');
     final yearRegex = RegExp(r'năm (\d{4})|(\d{4})');
 
-    int month = DateTime.now().month;
-    int year = DateTime.now().year;
+    DateTime now = DateTime.now();
+    int? day;
+    int month = now.month;
+    int year = now.year;
+
+    final dayMatch = dayRegex.firstMatch(q);
+    if (dayMatch != null) day = int.parse(dayMatch.group(1)!);
 
     final monthMatch = monthRegex.firstMatch(q);
     if (monthMatch != null) month = int.parse(monthMatch.group(1)!);
@@ -105,8 +115,18 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       year = int.parse(y);
     }
 
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0, 23, 59, 59);
+    DateTime start, end;
+    String timeStr;
+
+    if (day != null) {
+      start = DateTime(year, month, day, 0, 0, 0);
+      end = DateTime(year, month, day, 23, 59, 59);
+      timeStr = "ngày $day/$month/$year";
+    } else {
+      start = DateTime(year, month, 1);
+      end = DateTime(year, month + 1, 0, 23, 59, 59);
+      timeStr = "tháng $month/$year";
+    }
 
     final stats = await _service.getDetailedStats(
       start: start,
@@ -115,15 +135,17 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
       productType: pType,
     );
 
+    String typeName = pType == ProductType.dong ? "Đà Nẵng" : "Nội bộ";
+    String actionName = txType == TransactionType.export ? "xuất" : "nhập";
+
     if (stats.isEmpty) {
-      return "Không có dữ liệu ${txType == TransactionType.export ? "xuất" : "nhập"} hàng ${pType == ProductType.dong ? "Đà Nẵng" : "Nội bộ"} trong tháng $month/$year.";
+      return "Không có dữ liệu $actionName hàng $typeName trong $timeStr.";
     }
 
     double total = stats.values.reduce((a, b) => a + b);
-    String res =
-        "Thống kê ${txType == TransactionType.export ? "xuất" : "nhập"} hàng ${pType == ProductType.dong ? "Đà Nẵng" : "Nội bộ"} tháng $month/$year:\n";
+    String res = "Thống kê $actionName hàng $typeName ($timeStr):\n";
     res += "- Tổng số lượng: $total\n";
-    res += "- Chi tiết từng món:\n";
+    res += "- Chi tiết:\n";
     stats.forEach((name, qty) {
       res += "  + $name: $qty\n";
     });
@@ -131,39 +153,26 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     return res;
   }
 
-  Future<String> _handleLowStockQuery() async {
-    // Giả sử ngưỡng thấp là 10 (có thể lấy từ Firestore nếu có)
-    final snapshot = await _service.getProducts(ProductType.dong).first;
-    final snapshot2 = await _service.getProducts(ProductType.noiBo).first;
-
-    final lowStock = [
-      ...snapshot,
-      ...snapshot2,
-    ].where((p) => p.stock <= 10).toList();
-
-    if (lowStock.isEmpty)
-      return "Hiện tại không có sản phẩm nào sắp hết hàng (tất cả đều > 10).";
-
-    String res = "Danh sách sản phẩm sắp hết hàng (<= 10):\n";
-    for (var p in lowStock) {
-      res +=
-          "- ${p.name}: ${p.stock} ${p.unit} (${p.type == ProductType.dong ? "Đà Nẵng" : "Nội bộ"})\n";
+  Future<String> _handleTypeCountQuery(ProductType? pType) async {
+    final stats = await _service.getDashboardStats().first;
+    if (pType == ProductType.dong) {
+      return "Hàng Đà Nẵng hiện có ${stats['countDong']} loại sản phẩm khác nhau.";
+    } else if (pType == ProductType.noiBo) {
+      return "Hàng Nội Bộ hiện có ${stats['countNoiBo']} loại sản phẩm khác nhau.";
     }
-    return res;
+    return "Hệ thống đang quản lý:\n- ${stats['countDong']} loại hàng Đà Nẵng\n- ${stats['countNoiBo']} loại hàng Nội Bộ.";
   }
 
-  Future<String> _handleTotalStockQuery(String q) async {
+  Future<String> _handleStockSumQuery(ProductType? pType) async {
     final stats = await _service.getDashboardStats().first;
-
-    if (q.contains('đà nẵng') || q.contains('đn')) {
-      return "Thống kê hàng Đà Nẵng:\n- Số loại sản phẩm: ${stats['countDong']}\n- Tổng số lượng tồn: ${stats['totalQtyDong']}";
-    } else if (q.contains('nội bộ')) {
-      return "Thống kê hàng Nội Bộ:\n- Số loại sản phẩm: ${stats['countNoiBo']}\n- Tổng số lượng tồn: ${stats['totalQtyNoiBo']}";
+    if (pType == ProductType.dong) {
+      return "Tổng số lượng tồn kho của hàng Đà Nẵng là: ${stats['totalQtyDong']} sản phẩm.";
+    } else if (pType == ProductType.noiBo) {
+      return "Tổng số lượng tồn kho của hàng Nội Bộ là: ${stats['totalQtyNoiBo']} sản phẩm.";
     }
-
-    double grandTotal =
+    double total =
         (stats['totalQtyDong'] ?? 0.0) + (stats['totalQtyNoiBo'] ?? 0.0);
-    return "Tổng quan hệ thống:\n- Hàng Đà Nẵng: ${stats['countDong']} loại (${stats['totalQtyDong']} SP)\n- Hàng Nội Bộ: ${stats['countNoiBo']} loại (${stats['totalQtyNoiBo']} SP)\n- Tổng tồn kho: $grandTotal sản phẩm.";
+    return "Tổng tồn kho toàn hệ thống là $total sản phẩm (${stats['totalQtyDong']} Đà Nẵng, ${stats['totalQtyNoiBo']} Nội bộ).";
   }
 
   @override
