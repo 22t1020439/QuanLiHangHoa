@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:excel/excel.dart';
 import '../models/product_model.dart';
 import '../models/supplier_model.dart';
 import '../models/transaction_model.dart';
@@ -75,13 +74,11 @@ class FirestoreService {
     return _db
         .collection('products')
         .where('type', isEqualTo: type.name)
-        // Bỏ orderBy ở đây để tránh lỗi thiếu Index và không hiện dữ liệu cũ
         .snapshots()
         .map((snapshot) {
           final products = snapshot.docs
               .map((doc) => Product.fromFirestore(doc))
               .toList();
-          // Sắp xếp trong bộ nhớ máy (In-memory sorting)
           products.sort((a, b) => a.order.compareTo(b.order));
           return products;
         });
@@ -114,7 +111,7 @@ class FirestoreService {
         ActivityLog(
           action: 'Thêm hàng mới',
           details:
-              'Tên: ${product.name}, Loại: ${product.type == ProductType.dong ? "Hàng Đà Nẵng" : "Hàng Nội Bộ"}, Đơn vị: ${product.unit}',
+              'Tên: ${product.name}, Loại: ${product.type == ProductType.dong ? "Đà Nẵng" : "Hàng Nội Bộ"}, Đơn vị: ${product.unit}',
           timestamp: DateTime.now(),
           type: LogType.product,
         ),
@@ -220,11 +217,9 @@ class FirestoreService {
   Future<void> processTransaction(TransactionModel transaction) async {
     final batch = _db.batch();
 
-    // 1. Create the transaction record
     final transactionRef = _db.collection('transactions').doc();
     batch.set(transactionRef, transaction.toMap());
 
-    // 2. Update stock for each item in the transaction
     for (var item in transaction.items) {
       final productRef = _db.collection('products').doc(item.productId);
 
@@ -238,7 +233,6 @@ class FirestoreService {
       });
     }
 
-    // 3. Add log
     _addLog(
       batch,
       ActivityLog(
@@ -262,7 +256,6 @@ class FirestoreService {
     final batch = _db.batch();
     final docRef = _db.collection('transactions').doc(oldTx.id);
 
-    // 1. REVERT old stock changes
     for (var item in oldTx.items) {
       final productRef = _db.collection('products').doc(item.productId);
       double revertValue = oldTx.type == TransactionType.import
@@ -274,7 +267,6 @@ class FirestoreService {
       });
     }
 
-    // 2. APPLY new stock changes
     for (var item in newTx.items) {
       final productRef = _db.collection('products').doc(item.productId);
       double applyValue = newTx.type == TransactionType.import
@@ -286,10 +278,8 @@ class FirestoreService {
       });
     }
 
-    // 3. Update the transaction record
     batch.set(docRef, newTx.toMap());
 
-    // 4. Add log
     _addLog(
       batch,
       ActivityLog(
@@ -304,7 +294,6 @@ class FirestoreService {
   }
 
   Stream<List<TransactionModel>> getTransactions({TransactionType? type}) {
-    // Ép kiểu về Query để có thể gán lại sau khi dùng .where()
     Query<Map<String, dynamic>> query = _db.collection('transactions');
 
     if (type != null) {
@@ -315,7 +304,6 @@ class FirestoreService {
       final transactions = snapshot.docs
           .map((doc) => TransactionModel.fromFirestore(doc))
           .toList();
-      // Sắp xếp theo ngày giảm dần (mới nhất lên đầu) trong bộ nhớ máy
       transactions.sort((a, b) => b.date.compareTo(a.date));
       return transactions;
     });
@@ -324,11 +312,9 @@ class FirestoreService {
   Future<void> deleteTransaction(TransactionModel transaction) async {
     final batch = _db.batch();
 
-    // 1. Delete the transaction record
     final transactionRef = _db.collection('transactions').doc(transaction.id);
     batch.delete(transactionRef);
 
-    // 2. REVERT stock for each item
     for (var item in transaction.items) {
       final productRef = _db.collection('products').doc(item.productId);
 
@@ -342,7 +328,6 @@ class FirestoreService {
       });
     }
 
-    // 3. Add log
     _addLog(
       batch,
       ActivityLog(
@@ -350,7 +335,7 @@ class FirestoreService {
         details: 'Đã xóa phiếu ${transaction.code}',
         timestamp: DateTime.now(),
         type: LogType.transaction,
-        extraData: transaction.toMap(), // Lưu lại data để khôi phục
+        extraData: transaction.toMap(),
       ),
     );
 
@@ -363,11 +348,9 @@ class FirestoreService {
     final transaction = TransactionModel.fromMap(log.extraData!);
     final batch = _db.batch();
 
-    // 1. Re-create the transaction
     final docRef = _db.collection('transactions').doc();
     batch.set(docRef, transaction.toMap());
 
-    // 2. Re-apply stock changes
     for (var item in transaction.items) {
       final productRef = _db.collection('products').doc(item.productId);
       double applyValue = transaction.type == TransactionType.import
@@ -379,7 +362,6 @@ class FirestoreService {
       });
     }
 
-    // 3. Delete the "Delete" log and add a "Restore" log
     batch.delete(_db.collection('logs').doc(log.id));
     _addLog(
       batch,
@@ -396,18 +378,43 @@ class FirestoreService {
 
   // --- DASHBOARD STATS ---
   Stream<Map<String, dynamic>> getDashboardStats() {
-    return _db.collection('products').snapshots().map((snapshot) {
+    return _db.collection('products').snapshots().asyncMap((snapshot) async {
       final products = snapshot.docs
           .map((doc) => Product.fromFirestore(doc))
           .toList();
-      int totalItems = products.length;
-      int lowStockCount = products.where((p) => p.stock <= 5).length;
-      double totalStock = products.fold(0.0, (sum, p) => sum + p.stock);
+
+      int countDong = products.where((p) => p.type == ProductType.dong).length;
+      int countNoiBo = products
+          .where((p) => p.type == ProductType.noiBo)
+          .length;
+
+      // Tính tổng xuất hàng Đà Nẵng trong tháng này
+      final now = DateTime.now();
+      final firstDayOfMonth = DateTime(now.year, now.month, 1);
+
+      final txSnapshot = await _db
+          .collection('transactions')
+          .where('type', isEqualTo: TransactionType.export.name)
+          .where(
+            'date',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(firstDayOfMonth),
+          )
+          .get();
+
+      double monthExportDong = 0;
+      for (var doc in txSnapshot.docs) {
+        final tx = TransactionModel.fromFirestore(doc);
+        for (var item in tx.items) {
+          if (item.productType == 'dong') {
+            monthExportDong += item.quantity;
+          }
+        }
+      }
 
       return {
-        'totalItems': totalItems,
-        'lowStockCount': lowStockCount,
-        'totalStock': totalStock,
+        'countDong': countDong,
+        'countNoiBo': countNoiBo,
+        'monthExportDong': monthExportDong,
       };
     });
   }
@@ -418,7 +425,6 @@ class FirestoreService {
     final sheet = excel['Tồn kho'];
     excel.delete('Sheet1');
 
-    // Header
     sheet.appendRow([
       TextCellValue('Tên sản phẩm'),
       TextCellValue('Loại'),
@@ -438,7 +444,6 @@ class FirestoreService {
     }
 
     final fileBytes = excel.save();
-
     if (fileBytes != null) {
       await FileHelper.saveAndShare(fileBytes, 'bao_cao_ton_kho.xlsx');
     }
