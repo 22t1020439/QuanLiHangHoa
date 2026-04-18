@@ -1,13 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' if (dart.library.html) 'dart:html' as io;
 import '../models/product_model.dart';
 import '../models/supplier_model.dart';
 import '../models/transaction_model.dart';
 import '../models/activity_log_model.dart';
+import 'file_helper.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -443,25 +440,7 @@ class FirestoreService {
     final fileBytes = excel.save();
 
     if (fileBytes != null) {
-      if (kIsWeb) {
-        // Xử lý tải file cho Web
-        // excel.save() trên web thường trả về bytes, ta có thể dùng anchor element để tải
-        final content = io.Blob([
-          fileBytes,
-        ], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        final url = io.Url.createObjectUrlFromBlob(content);
-        final anchor = io.AnchorElement(href: url)
-          ..setAttribute('download', 'bao_cao_ton_kho.xlsx')
-          ..click();
-        io.Url.revokeObjectUrl(url);
-      } else {
-        // Xử lý cho Mobile/Desktop (Android, iOS, Windows...)
-        final directory = await getTemporaryDirectory();
-        final filePath = '${directory.path}/bao_cao_ton_kho.xlsx';
-        final file = io.File(filePath);
-        await file.writeAsBytes(fileBytes);
-        await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo tồn kho');
-      }
+      await FileHelper.saveAndShare(fileBytes, 'bao_cao_ton_kho.xlsx');
     }
   }
 }
