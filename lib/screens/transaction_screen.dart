@@ -12,23 +12,58 @@ class TransactionScreen extends StatefulWidget {
   State<TransactionScreen> createState() => _TransactionScreenState();
 }
 
-class _TransactionScreenState extends State<TransactionScreen> {
+class _TransactionScreenState extends State<TransactionScreen>
+    with SingleTickerProviderStateMixin {
   final FirestoreService _service = FirestoreService();
+  late TabController _tabController;
 
-  void _showTransactionDialog(TransactionType type) async {
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {}); // Rebuild to show/hide correct FAB
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _showTransactionDialog(
+    TransactionType type, {
+    TransactionModel? existingTx,
+  }) async {
     // 1. Get initial data
     final productsDong = await _service.getProducts(ProductType.dong).first;
     final productsNoiBo = await _service.getProducts(ProductType.noiBo).first;
     final suppliers = await _service.getSuppliers().first;
 
-    List<TransactionItem> tempItems = [];
+    List<TransactionItem> tempItems = existingTx != null
+        ? List.from(existingTx.items)
+        : [];
     ProductType selectedCategory = ProductType.dong;
     Product? selectedProduct;
     Supplier? selectedSupplier = suppliers.isNotEmpty ? suppliers.first : null;
-    final TextEditingController qtyController = TextEditingController();
-    final TextEditingController noteController = TextEditingController();
 
-    void updateSelectedProduct(List<Product> products, StateSetter setDialogState) {
+    if (existingTx != null && existingTx.supplierId != null) {
+      selectedSupplier = suppliers.firstWhere(
+        (s) => s.id == existingTx.supplierId,
+        orElse: () => suppliers.first,
+      );
+    }
+
+    final TextEditingController qtyController = TextEditingController();
+    final TextEditingController noteController = TextEditingController(
+      text: existingTx?.note ?? '',
+    );
+
+    void updateSelectedProduct(
+      List<Product> products,
+      StateSetter setDialogState,
+    ) {
       if (products.isNotEmpty) {
         selectedProduct = products.first;
       } else {
@@ -45,12 +80,17 @@ class _TransactionScreenState extends State<TransactionScreen> {
         barrierDismissible: false,
         builder: (ctx) => StatefulBuilder(
           builder: (context, setDialogState) {
-            List<Product> currentProducts =
-                selectedCategory == ProductType.dong ? productsDong : productsNoiBo;
+            List<Product> currentProducts = selectedCategory == ProductType.dong
+                ? productsDong
+                : productsNoiBo;
 
             return AlertDialog(
               title: Text(
-                type == TransactionType.import ? 'Phiếu Nhập' : 'Phiếu Xuất',
+                existingTx != null
+                    ? 'Sửa Phiếu ${existingTx.code}'
+                    : (type == TransactionType.import
+                          ? 'Phiếu Nhập'
+                          : 'Phiếu Xuất'),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               content: SizedBox(
@@ -82,8 +122,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             setDialogState(() {
                               selectedCategory = val;
                               List<Product> newProducts =
-                                  val == ProductType.dong ? productsDong : productsNoiBo;
-                              updateSelectedProduct(newProducts, setDialogState);
+                                  val == ProductType.dong
+                                  ? productsDong
+                                  : productsNoiBo;
+                              updateSelectedProduct(
+                                newProducts,
+                                setDialogState,
+                              );
                             });
                           }
                         },
@@ -99,10 +144,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             border: OutlineInputBorder(),
                           ),
                           items: suppliers
-                              .map((s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Text(s.name),
-                                  ))
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(s.name),
+                                ),
+                              )
                               .toList(),
                           onChanged: (val) =>
                               setDialogState(() => selectedSupplier = val),
@@ -124,10 +171,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 border: OutlineInputBorder(),
                               ),
                               items: currentProducts
-                                  .map((p) => DropdownMenuItem(
-                                        value: p,
-                                        child: Text(p.name),
-                                      ))
+                                  .map(
+                                    (p) => DropdownMenuItem(
+                                      value: p,
+                                      child: Text(p.name),
+                                    ),
+                                  )
                                   .toList(),
                               onChanged: (val) =>
                                   setDialogState(() => selectedProduct = val),
@@ -141,7 +190,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 labelText: 'SL',
                                 border: OutlineInputBorder(),
                               ),
-                              keyboardType: TextInputType.number,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                             ),
                           ),
                         ],
@@ -166,16 +218,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
                           ElevatedButton(
                             onPressed: () {
                               if (selectedProduct == null) return;
-                              int qty = int.tryParse(qtyController.text) ?? 0;
+                              // Thay đổi dấu phẩy thành dấu chấm để parse double chính xác
+                              final qtyText = qtyController.text.replaceAll(
+                                ',',
+                                '.',
+                              );
+                              double qty = double.tryParse(qtyText) ?? 0.0;
                               if (qty <= 0) return;
 
                               setDialogState(() {
-                                tempItems.add(TransactionItem(
-                                  productId: selectedProduct!.id!,
-                                  productName: selectedProduct!.name,
-                                  quantity: qty,
-                                  productType: selectedProduct!.type.name,
-                                ));
+                                tempItems.add(
+                                  TransactionItem(
+                                    productId: selectedProduct!.id!,
+                                    productName: selectedProduct!.name,
+                                    quantity: qty,
+                                    productType: selectedProduct!.type.name,
+                                  ),
+                                );
                                 qtyController.clear();
                               });
                             },
@@ -215,7 +274,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 orElse: () => productsNoiBo.firstWhere(
                                   (p) => p.id == item.productId,
                                   orElse: () => Product(
-                                      name: "", stock: 0, unit: "", type: ProductType.dong),
+                                    name: "",
+                                    stock: 0,
+                                    unit: "",
+                                    type: ProductType.dong,
+                                  ),
                                 ),
                               );
                               unit = p.unit;
@@ -226,7 +289,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                   title: Text(item.productName),
                                   subtitle: Text('SL: ${item.quantity} $unit'),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                    ),
                                     onPressed: () {
                                       setDialogState(() {
                                         tempItems.removeAt(index);
@@ -259,25 +325,48 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   onPressed: tempItems.isEmpty
                       ? null
                       : () async {
-                          final transaction = TransactionModel(
-                            date: DateTime.now(),
-                            type: type,
-                            note: noteController.text,
-                            supplierId: selectedSupplier?.id,
-                            supplierName: selectedSupplier?.name,
-                            items: tempItems,
-                          );
+                          try {
+                            final transaction = TransactionModel(
+                              id: existingTx?.id,
+                              code:
+                                  existingTx?.code ??
+                                  '${type == TransactionType.import ? "PN" : "PX"}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+                              date: existingTx?.date ?? DateTime.now(),
+                              type: type,
+                              note: noteController.text,
+                              supplierId: selectedSupplier?.id,
+                              supplierName: selectedSupplier?.name,
+                              items: tempItems,
+                            );
 
-                          await _service.processTransaction(transaction);
-                          if (mounted) Navigator.pop(ctx);
+                            if (existingTx != null) {
+                              await _service.updateTransaction(
+                                existingTx,
+                                transaction,
+                              );
+                            } else {
+                              await _service.processTransaction(transaction);
+                            }
+
+                            if (mounted) Navigator.pop(ctx);
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Lỗi: $e')),
+                              );
+                            }
+                          }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        type == TransactionType.import ? Colors.green : Colors.red,
+                    backgroundColor: type == TransactionType.import
+                        ? Colors.green
+                        : Colors.red,
                     foregroundColor: Colors.white,
                   ),
                   child: Text(
-                    type == TransactionType.import ? 'Nhập' : 'Xuất',
+                    existingTx != null
+                        ? 'Lưu thay đổi'
+                        : (type == TransactionType.import ? 'Nhập' : 'Xuất'),
                   ),
                 ),
               ],
@@ -288,57 +377,196 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
+  void _showDetailDialog(TransactionModel t) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Chi tiết phiếu ${t.code}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ngày: ${DateFormat('dd/MM/yyyy HH:mm').format(t.date)}'),
+              if (t.supplierName != null)
+                Text('Nhà cung cấp: ${t.supplierName}'),
+              Text('Ghi chú: ${t.note}'),
+              const Divider(),
+              const Text(
+                'Danh sách mặt hàng:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: t.items.length,
+                  itemBuilder: (context, index) {
+                    final item = t.items[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(item.productName),
+                      subtitle: Text('Số lượng: ${item.quantity}'),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nhập / Xuất Kho')),
-      body: StreamBuilder<List<TransactionModel>>(
-        stream: _service.getTransactions(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return const Center(child: Text('Lỗi tải dữ liệu'));
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final transactions = snapshot.data ?? [];
-          return ListView.builder(
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              final t = transactions[index];
-              final isImport = t.type == TransactionType.import;
-              final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(t.date);
-              
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: ListTile(
-                  leading: Icon(
-                    isImport ? Icons.arrow_downward : Icons.arrow_upward,
-                    color: isImport ? Colors.green : Colors.red,
-                  ),
-                  title: Text('${isImport ? "NHẬP" : "XUẤT"}: ${t.items.first.productName}'),
-                  subtitle: Text('SL: ${t.items.first.quantity} | $dateStr\n${t.note}'),
-                  trailing: Text(t.supplierName ?? '', style: const TextStyle(fontSize: 12)),
-                  isThreeLine: true,
-                ),
-              );
-            },
-          );
-        },
+      appBar: AppBar(
+        title: const Text('Nhập / Xuất Kho'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.download), text: 'Nhập Kho'),
+            Tab(icon: Icon(Icons.upload), text: 'Xuất Kho'),
+          ],
+        ),
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          FloatingActionButton(
-            heroTag: 'export',
-            onPressed: () => _showTransactionDialog(TransactionType.export),
-            backgroundColor: Colors.red,
-            child: const Icon(Icons.remove),
+          _buildTransactionList(TransactionType.import),
+          _buildTransactionList(TransactionType.export),
+        ],
+      ),
+      floatingActionButton: _tabController.index == 0
+          ? FloatingActionButton(
+              heroTag: 'import',
+              onPressed: () => _showTransactionDialog(TransactionType.import),
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.add),
+            )
+          : FloatingActionButton(
+              heroTag: 'export',
+              onPressed: () => _showTransactionDialog(TransactionType.export),
+              backgroundColor: Colors.red,
+              child: const Icon(Icons.remove),
+            ),
+    );
+  }
+
+  Widget _buildTransactionList(TransactionType type) {
+    return StreamBuilder<List<TransactionModel>>(
+      stream: _service.getTransactions(type: type),
+      builder: (context, snapshot) {
+        if (snapshot.hasError)
+          return const Center(child: Text('Lỗi tải dữ liệu'));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final transactions = snapshot.data ?? [];
+        if (transactions.isEmpty) {
+          return Center(
+            child: Text(
+              type == TransactionType.import
+                  ? 'Chưa có phiếu nhập nào'
+                  : 'Chưa có phiếu xuất nào',
+            ),
+          );
+        }
+        return ListView.builder(
+          itemCount: transactions.length,
+          itemBuilder: (context, index) {
+            final t = transactions[index];
+            final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(t.date);
+
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              child: ListTile(
+                onTap: () => _showDetailDialog(t),
+                leading: CircleAvatar(
+                  backgroundColor: type == TransactionType.import
+                      ? Colors.green[50]
+                      : Colors.red[50],
+                  child: Icon(
+                    type == TransactionType.import
+                        ? Icons.arrow_downward
+                        : Icons.arrow_upward,
+                    color: type == TransactionType.import
+                        ? Colors.green
+                        : Colors.red,
+                  ),
+                ),
+                title: Text(
+                  '${t.code}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  '${t.items.length} mặt hàng | $dateStr\n${t.note}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                      onPressed: () =>
+                          _showTransactionDialog(type, existingTx: t),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _confirmDelete(t),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+                isThreeLine: true,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDelete(TransactionModel t) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xác nhận xóa'),
+        content: Text(
+          'Bạn có chắc chắn muốn xóa phiếu ${t.code}?\nSố lượng tồn kho của các mặt hàng sẽ được tự động hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Hủy'),
           ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            heroTag: 'import',
-            onPressed: () => _showTransactionDialog(TransactionType.import),
-            backgroundColor: Colors.green,
-            child: const Icon(Icons.add),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              try {
+                await _service.deleteTransaction(t);
+                if (mounted) Navigator.pop(ctx);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                }
+              }
+            },
+            child: const Text('Xóa phiếu'),
           ),
         ],
       ),

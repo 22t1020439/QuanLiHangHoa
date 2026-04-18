@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'screens/product_screen.dart';
 import 'screens/supplier_screen.dart';
 import 'screens/transaction_screen.dart';
+import 'screens/history_screen.dart';
 import 'models/product_model.dart';
 import 'services/firestore_service.dart';
 
@@ -31,6 +32,9 @@ void main() async {
       );
     }
     */
+
+    // Tự động dọn dẹp lịch sử cũ
+    FirestoreService().cleanupOldLogs();
 
     runApp(const InventoryApp());
   } catch (e) {
@@ -69,37 +73,33 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const ProductScreen(type: ProductType.dong),
-    const ProductScreen(type: ProductType.noiBo),
-    const SupplierScreen(),
-    const TransactionScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = [
+      HomeScreen(onNavigateToHistory: () => setState(() => _selectedIndex = 5)),
+      const ProductScreen(type: ProductType.dong),
+      const ProductScreen(type: ProductType.noiBo),
+      const SupplierScreen(),
+      const TransactionScreen(),
+      const HistoryScreen(),
+    ];
+
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: screens[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Tổng quan'),
-          NavigationDestination(
-            icon: Icon(Icons.inventory),
-            label: 'Hàng Đà Nẵng',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2),
-            label: 'Hàng Nội Bộ',
-          ),
+          NavigationDestination(icon: Icon(Icons.inventory), label: 'Đà Nẵng'),
+          NavigationDestination(icon: Icon(Icons.inventory_2), label: 'Nội Bộ'),
           NavigationDestination(icon: Icon(Icons.business), label: 'NCC'),
           NavigationDestination(
             icon: Icon(Icons.swap_horiz),
             label: 'Nhập/Xuất',
           ),
+          NavigationDestination(icon: Icon(Icons.history), label: 'Lịch Sử'),
         ],
       ),
     );
@@ -107,7 +107,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final VoidCallback onNavigateToHistory;
+  const HomeScreen({super.key, required this.onNavigateToHistory});
 
   @override
   Widget build(BuildContext context) {
@@ -164,10 +165,11 @@ class HomeScreen extends StatelessWidget {
                       Colors.orange,
                     ),
                     _buildStatCard(
-                      'Hệ thống',
-                      'Ổn định',
-                      Icons.check_circle,
-                      Colors.green,
+                      'Hoạt động',
+                      'Lịch sử',
+                      Icons.history,
+                      Colors.purple,
+                      onTap: onNavigateToHistory,
                     ),
                   ],
                 ),
@@ -197,29 +199,33 @@ class HomeScreen extends StatelessWidget {
     String title,
     String value,
     IconData icon,
-    Color color,
-  ) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
-        padding: const EdgeInsets.all(15.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 10),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-          ],
+    Color color, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        child: Padding(
+          padding: const EdgeInsets.all(15.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 40, color: color),
+              const SizedBox(height: 10),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600], fontSize: 14),
+              ),
+            ],
+          ),
         ),
       ),
     );

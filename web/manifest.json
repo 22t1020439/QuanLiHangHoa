@@ -1,11 +1,11 @@
 {
-    "name": "Kho Hàng Thông Minh",
+    "name": "Kho Hàng Dã Viên",
     "short_name": "Kho Hàng",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#3f51b5",
     "theme_color": "#3f51b5",
-    "description": "Ứng dụng quản lý kho hàng thông minh",
+    "description": "Ứng dụng quản lý kho hàng Dã Viên",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

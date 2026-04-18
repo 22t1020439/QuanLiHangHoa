@@ -31,48 +31,107 @@ class _SupplierScreenState extends State<SupplierScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => Padding(
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          top: 20,
-          left: 20,
-          right: 20,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              supplier == null ? 'Thêm nhà cung cấp' : 'Sửa nhà cung cấp',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  supplier == null ? 'Thêm nhà cung cấp' : 'Sửa nhà cung cấp',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên Nhà Cung Cấp',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.business_outlined),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Địa chỉ',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Số điện thoại',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone_outlined),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 25),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final name = _nameController.text.trim();
+                      if (name.isNotEmpty) {
+                        final newSupplier = Supplier(
+                          id: supplier?.id,
+                          name: name,
+                          address: _addressController.text.trim(),
+                          phone: _phoneController.text.trim(),
+                        );
+                        await _service.saveSupplier(newSupplier);
+                        if (mounted) Navigator.pop(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vui lòng nhập tên nhà cung cấp'),
+                          ),
+                        );
+                      }
+                    },
+                    child: Text(
+                      supplier == null ? 'THÊM MỚI' : 'CẬP NHẬT',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
             ),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Tên NCC'),
-            ),
-            TextField(
-              controller: _addressController,
-              decoration: const InputDecoration(labelText: 'Địa chỉ'),
-            ),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Số điện thoại'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                final newSupplier = Supplier(
-                  id: supplier?.id,
-                  name: _nameController.text,
-                  address: _addressController.text,
-                  phone: _phoneController.text,
-                );
-                await _service.saveSupplier(newSupplier);
-                if (mounted) Navigator.pop(context);
-              },
-              child: Text(supplier == null ? 'Thêm' : 'Lưu'),
-            ),
-            const SizedBox(height: 20),
-          ],
+          ),
         ),
       ),
     );
@@ -150,7 +209,7 @@ class _SupplierScreenState extends State<SupplierScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _service.deleteSupplier(s.id!),
+                              onPressed: () => _service.deleteSupplier(s),
                             ),
                           ],
                         ),

@@ -5,7 +5,7 @@ enum TransactionType { import, export }
 class TransactionItem {
   final String productId;
   final String productName;
-  final int quantity;
+  final double quantity;
   final String productType; // 'dong' or 'noiBo'
 
   TransactionItem({
@@ -28,7 +28,7 @@ class TransactionItem {
     return TransactionItem(
       productId: map['product_id'] ?? '',
       productName: map['product_name'] ?? '',
-      quantity: map['quantity'] ?? 0,
+      quantity: (map['quantity'] ?? 0).toDouble(),
       productType: map['product_type'] ?? 'dong',
     );
   }
@@ -36,6 +36,7 @@ class TransactionItem {
 
 class TransactionModel {
   final String? id;
+  final String code; // New field for PN-001 or PX-001
   final DateTime date;
   final String note;
   final String? supplierId;
@@ -45,6 +46,7 @@ class TransactionModel {
 
   TransactionModel({
     this.id,
+    required this.code,
     required this.date,
     this.note = '',
     this.supplierId,
@@ -55,6 +57,7 @@ class TransactionModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'code': code,
       'date': Timestamp.fromDate(date),
       'note': note,
       'supplier_id': supplierId,
@@ -68,13 +71,37 @@ class TransactionModel {
     Map data = doc.data() as Map<String, dynamic>;
     return TransactionModel(
       id: doc.id,
+      code: data['code'] ?? '',
       date: (data['date'] as Timestamp).toDate(),
       note: data['note'] ?? '',
       supplierId: data['supplier_id'],
       supplierName: data['supplier_name'],
-      type: data['type'] == 'export' ? TransactionType.export : TransactionType.import,
+      type: data['type'] == 'export'
+          ? TransactionType.export
+          : TransactionType.import,
       items: (data['items'] as List? ?? [])
           .map((i) => TransactionItem.fromMap(i))
+          .toList(),
+    );
+  }
+
+  factory TransactionModel.fromMap(Map<String, dynamic> data) {
+    return TransactionModel(
+      id: data['id'],
+      code: data['code'] ?? '',
+      date: (data['date'] is Timestamp)
+          ? (data['date'] as Timestamp).toDate()
+          : (data['date'] is String)
+              ? DateTime.parse(data['date'])
+              : DateTime.now(),
+      note: data['note'] ?? '',
+      supplierId: data['supplier_id'],
+      supplierName: data['supplier_name'],
+      type: data['type'] == 'export'
+          ? TransactionType.export
+          : TransactionType.import,
+      items: (data['items'] as List? ?? [])
+          .map((i) => TransactionItem.fromMap(i as Map<String, dynamic>))
           .toList(),
     );
   }
