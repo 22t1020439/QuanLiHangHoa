@@ -175,6 +175,27 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     return "Tổng tồn kho toàn hệ thống là $total sản phẩm (${stats['totalQtyDong']} Đà Nẵng, ${stats['totalQtyNoiBo']} Nội bộ).";
   }
 
+  Future<String> _handleLowStockQuery() async {
+    // Giả sử ngưỡng thấp là 10 (có thể lấy từ Firestore nếu có)
+    final snapshot = await _service.getProducts(ProductType.dong).first;
+    final snapshot2 = await _service.getProducts(ProductType.noiBo).first;
+
+    final lowStock = [
+      ...snapshot,
+      ...snapshot2,
+    ].where((p) => p.stock <= 10).toList();
+
+    if (lowStock.isEmpty)
+      return "Hiện tại không có sản phẩm nào sắp hết hàng (tất cả đều > 10).";
+
+    String res = "Danh sách sản phẩm sắp hết hàng (<= 10):\n";
+    for (var p in lowStock) {
+      res +=
+          "- ${p.name}: ${p.stock} ${p.unit} (${p.type == ProductType.dong ? "Đà Nẵng" : "Nội bộ"})\n";
+    }
+    return res;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
