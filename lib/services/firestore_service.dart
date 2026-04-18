@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart';
 import '../models/product_model.dart';
 import '../models/supplier_model.dart';
 import '../models/transaction_model.dart';
@@ -378,44 +379,63 @@ class FirestoreService {
 
   // --- DASHBOARD STATS ---
   Stream<Map<String, dynamic>> getDashboardStats() {
-    return _db.collection('products').snapshots().asyncMap((snapshot) async {
-      final products = snapshot.docs
-          .map((doc) => Product.fromFirestore(doc))
-          .toList();
+    // Kết hợp cả stream products và transactions để cập nhật ngay khi có bất kỳ thay đổi nào
+    return _db.collection('products').snapshots().asyncMap((
+      productSnapshot,
+    ) async {
+      try {
+        final products = productSnapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList();
 
-      int countDong = products.where((p) => p.type == ProductType.dong).length;
-      int countNoiBo = products
-          .where((p) => p.type == ProductType.noiBo)
-          .length;
+        int countDong = products
+            .where((p) => p.type == ProductType.dong)
+            .length;
+        int countNoiBo = products
+            .where((p) => p.type == ProductType.noiBo)
+            .length;
 
-      // Tính tổng xuất hàng Đà Nẵng trong tháng này
-      final now = DateTime.now();
-      final firstDayOfMonth = DateTime(now.year, now.month, 1);
+        // Tính tổng xuất hàng Đà Nẵng trong tháng này
+        final now = DateTime.now();
+        final firstDayOfMonth = DateTime(now.year, now.month, 1);
 
-      final txSnapshot = await _db
-          .collection('transactions')
-          .where('type', isEqualTo: TransactionType.export.name)
-          .where(
-            'date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(firstDayOfMonth),
-          )
-          .get();
+        // Lấy tất cả giao dịch trong tháng này (tránh dùng nhiều where để không cần index phức tạp)
+        final txSnapshot = await _db
+            .collection('transactions')
+            .where(
+              'date',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(firstDayOfMonth),
+            )
+            .get();
 
-      double monthExportDong = 0;
-      for (var doc in txSnapshot.docs) {
-        final tx = TransactionModel.fromFirestore(doc);
-        for (var item in tx.items) {
-          if (item.productType == 'dong') {
-            monthExportDong += item.quantity;
+        double monthExportDong = 0;
+        for (var doc in txSnapshot.docs) {
+          final data = doc.data();
+          // Chỉ tính phiếu xuất
+          if (data['type'] == 'export') {
+            final items = (data['items'] as List? ?? []);
+            for (var i in items) {
+              if (i['product_type'] == 'dong') {
+                monthExportDong += (i['quantity'] ?? 0).toDouble();
+              }
+            }
           }
         }
-      }
 
-      return {
-        'countDong': countDong,
-        'countNoiBo': countNoiBo,
-        'monthExportDong': monthExportDong,
-      };
+        return {
+          'countDong': countDong,
+          'countNoiBo': countNoiBo,
+          'monthExportDong': monthExportDong,
+        };
+      } catch (e) {
+        print("Lỗi getDashboardStats: $e");
+        return {
+          'countDong': 0,
+          'countNoiBo': 0,
+          'monthExportDong': 0.0,
+          'error': e.toString(),
+        };
+      }
     });
   }
 

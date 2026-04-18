@@ -34,12 +34,19 @@ class HomeScreen extends StatelessWidget {
       body: StreamBuilder<Map<String, dynamic>>(
         stream: service.getDashboardStats(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Lỗi tải dữ liệu: ${snapshot.error}'));
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           final stats =
               snapshot.data ??
               {'countDong': 0, 'countNoiBo': 0, 'monthExportDong': 0.0};
+
+          if (stats.containsKey('error')) {
+            return Center(child: Text('Lỗi hệ thống: ${stats['error']}'));
+          }
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20.0),
