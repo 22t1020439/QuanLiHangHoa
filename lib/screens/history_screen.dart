@@ -75,10 +75,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  void _confirmRestore(
-    BuildContext context,
-    ActivityLog log,
-  ) {
+  void _confirmRestore(BuildContext context, ActivityLog log) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -101,9 +98,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Lỗi khôi phục: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Lỗi khôi phục: $e')));
                 }
               }
             },
@@ -201,7 +198,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
                 return ListView.separated(
                   itemCount: logs.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final log = logs[index];
                     final dateStr = DateFormat(
@@ -209,7 +207,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ).format(log.timestamp);
 
                     final bool canRestore =
-                        log.type == LogType.transaction && log.extraData != null;
+                        log.type == LogType.transaction &&
+                        log.extraData != null;
 
                     return ListTile(
                       leading: _buildLeadingIcon(log.type),
@@ -224,14 +223,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           const SizedBox(height: 4),
                           Text(
                             dateStr,
-                            style:
-                                TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
                       trailing: canRestore
                           ? IconButton(
-                              icon: const Icon(Icons.restore, color: Colors.blue),
+                              icon: const Icon(
+                                Icons.restore,
+                                color: Colors.blue,
+                              ),
                               onPressed: () => _confirmRestore(context, log),
                               tooltip: 'Khôi phục phiếu',
                             )
@@ -259,7 +263,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case LogType.system:
         return 'Hệ thống';
     }
-  }
   }
 
   Widget _buildLeadingIcon(LogType type) {
