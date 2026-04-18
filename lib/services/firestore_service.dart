@@ -409,6 +409,8 @@ class FirestoreService {
             .get();
 
         double monthExportDong = 0;
+        Map<String, double> dongExportDetails = {};
+
         for (var doc in txSnapshot.docs) {
           final data = doc.data();
           // Chỉ tính phiếu xuất
@@ -416,7 +418,12 @@ class FirestoreService {
             final items = (data['items'] as List? ?? []);
             for (var i in items) {
               if (i['product_type'] == 'dong') {
-                monthExportDong += (i['quantity'] ?? 0).toDouble();
+                double qty = (i['quantity'] ?? 0).toDouble();
+                String name = i['product_name'] ?? 'Không tên';
+                monthExportDong += qty;
+
+                // Cộng dồn theo tên mặt hàng
+                dongExportDetails[name] = (dongExportDetails[name] ?? 0) + qty;
               }
             }
           }
@@ -426,6 +433,7 @@ class FirestoreService {
           'countDong': countDong,
           'countNoiBo': countNoiBo,
           'monthExportDong': monthExportDong,
+          'dongExportDetails': dongExportDetails,
         };
       } catch (e) {
         print("Lỗi getDashboardStats: $e");

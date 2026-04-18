@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../services/firestore_service.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -99,36 +100,54 @@ class HomeScreen extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const CircleAvatar(
-                          backgroundColor: Colors.orangeAccent,
-                          radius: 25,
-                          child: Icon(Icons.trending_up, color: Colors.white),
+                        Row(
+                          children: [
+                            const CircleAvatar(
+                              backgroundColor: Colors.orangeAccent,
+                              radius: 20,
+                              child: Icon(
+                                Icons.trending_up,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Đà Nẵng xuất tháng này',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${stats['monthExportDong']}',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orange,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 20),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Đà Nẵng xuất tháng này',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              Text(
-                                '${stats['monthExportDong']}',
-                                style: const TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orange,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 25),
+                        const Text(
+                          'Biểu đồ xuất hàng chi tiết',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 20),
+                        _buildExportBarChart(stats['dongExportDetails'] ?? {}),
                       ],
                     ),
                   ),
@@ -151,6 +170,125 @@ class HomeScreen extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildExportBarChart(Map<String, dynamic> data) {
+    // Lọc bỏ các mặt hàng có số lượng bằng 0
+    final filteredData = data.entries
+        .where((e) => (e.value as double) > 0)
+        .toList();
+
+    if (filteredData.isEmpty) {
+      return const SizedBox(
+        height: 100,
+        child: Center(
+          child: Text(
+            'Chưa có dữ liệu xuất hàng Đà Nẵng',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 250,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY:
+              filteredData
+                  .map((e) => e.value as double)
+                  .reduce((a, b) => a > b ? a : b) *
+              1.2,
+          barTouchData: BarTouchData(
+            enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              getTooltipColor: (group) => Colors.blueAccent,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                return BarTooltipItem(
+                  '${filteredData[groupIndex].key}\n',
+                  const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: rod.toY.toString(),
+                      style: const TextStyle(
+                        color: Colors.yellow,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 60,
+                getTitlesWidget: (value, meta) {
+                  int index = value.toInt();
+                  if (index >= 0 && index < filteredData.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: RotatedBox(
+                        quarterTurns: 1,
+                        child: Text(
+                          filteredData[index].key,
+                          style: const TextStyle(fontSize: 10),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  return const Text('');
+                },
+              ),
+            ),
+            leftTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: true, reservedSize: 40),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          gridData: const FlGridData(show: true, drawVerticalLine: false),
+          borderData: FlBorderData(
+            show: true,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey[300]!, width: 1),
+              left: BorderSide(color: Colors.grey[300]!, width: 1),
+            ),
+          ),
+          barGroups: filteredData.asMap().entries.map((entry) {
+            return BarChartGroupData(
+              x: entry.key,
+              barRods: [
+                BarChartRodData(
+                  toY: entry.value.value as double,
+                  color: Colors.blue,
+                  width: 30,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(6),
+                    topRight: Radius.circular(6),
+                  ),
+                ),
+              ],
+              showingTooltipIndicators: [0],
+            );
+          }).toList(),
+        ),
       ),
     );
   }
