@@ -61,6 +61,17 @@ class FirestoreService {
     }
   }
 
+  Future<void> deleteAllLogs() async {
+    final logs = await _db.collection('logs').get();
+    if (logs.docs.isNotEmpty) {
+      final batch = _db.batch();
+      for (var doc in logs.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+  }
+
   // --- PRODUCTS ---
   Stream<List<Product>> getProducts(ProductType type) {
     return _db

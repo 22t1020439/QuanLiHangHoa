@@ -111,6 +111,48 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  void _confirmDeleteAll(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa tất cả lịch sử'),
+        content: const Text(
+          'Bạn có chắc chắn muốn xóa toàn bộ lịch sử hoạt động? Hành động này không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await _service.deleteAllLogs();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Đã xóa tất cả lịch sử')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Lỗi khi xóa: $e')));
+                }
+              }
+            },
+            child: const Text(
+              'Xóa tất cả',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,6 +201,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                     ),
                   ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_forever, color: Colors.red),
+                  onPressed: () => _confirmDeleteAll(context),
+                  tooltip: 'Xóa tất cả lịch sử',
                 ),
               ],
             ),
