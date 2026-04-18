@@ -85,13 +85,13 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     _buildStatCard(
                       'Sản phẩm Đà Nẵng',
-                      '${stats['countDong']} loại\n(${stats['totalQtyDong']} SP)',
+                      '${stats['countDong']} loại',
                       Icons.inventory,
                       Colors.blue,
                     ),
                     _buildStatCard(
                       'Sản phẩm Nội Bộ',
-                      '${stats['countNoiBo']} loại\n(${stats['totalQtyNoiBo']} SP)',
+                      '${stats['countNoiBo']} loại',
                       Icons.inventory_2,
                       Colors.green,
                     ),
@@ -228,22 +228,12 @@ class HomeScreen extends StatelessWidget {
               getTooltipColor: (group) => Colors.blueAccent,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 return BarTooltipItem(
-                  '${filteredData[groupIndex].key}\n',
+                  rod.toY.toString(),
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
-                  children: [
-                    TextSpan(
-                      text: rod.toY.toString(),
-                      style: const TextStyle(
-                        color: Colors.yellow,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
                 );
               },
             ),
