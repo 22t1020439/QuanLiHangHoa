@@ -454,21 +454,26 @@ class FirestoreService {
     required TransactionType txType,
     required ProductType productType,
   }) async {
+    // Chỉ truy vấn theo ngày để tránh yêu cầu tạo Index phức tạp trong Firestore
     final txSnapshot = await _db
         .collection('transactions')
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
         .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end))
-        .where('type', isEqualTo: txType.name)
         .get();
 
     Map<String, double> details = {};
     for (var doc in txSnapshot.docs) {
-      final items = (doc.data()['items'] as List? ?? []);
-      for (var i in items) {
-        if (i['product_type'] == productType.name) {
-          double qty = (i['quantity'] ?? 0).toDouble();
-          String name = i['product_name'] ?? 'Không tên';
-          details[name] = (details[name] ?? 0) + qty;
+      final data = doc.data();
+      // Lọc theo loại giao dịch (nhập/xuất) trong code
+      if (data['type'] == txType.name) {
+        final items = (data['items'] as List? ?? []);
+        for (var i in items) {
+          // Lọc theo loại sản phẩm (Đà Nẵng/Nội bộ)
+          if (i['product_type'] == productType.name) {
+            double qty = (i['quantity'] ?? 0).toDouble();
+            String name = i['product_name'] ?? 'Không tên';
+            details[name] = (details[name] ?? 0) + qty;
+          }
         }
       }
     }
