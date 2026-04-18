@@ -7,6 +7,7 @@ import 'screens/supplier_screen.dart';
 import 'screens/transaction_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/ai_assistant_screen.dart';
 import 'models/product_model.dart';
 import 'services/firestore_service.dart';
 
@@ -83,6 +84,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const SupplierScreen(),
       const TransactionScreen(),
       const HistoryScreen(),
+      const AIAssistantScreen(),
     ];
 
     return Scaffold(
@@ -101,6 +103,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             label: 'Nhập/Xuất',
           ),
           NavigationDestination(icon: Icon(Icons.history), label: 'Lịch Sử'),
+          NavigationDestination(
+            icon: Icon(Icons.smart_toy),
+            label: 'Trợ lý AI',
+          ),
         ],
       ),
     );

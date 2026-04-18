@@ -447,6 +447,34 @@ class FirestoreService {
     });
   }
 
+  // --- AI HELPER METHODS ---
+  Future<Map<String, double>> getDetailedStats({
+    required DateTime start,
+    required DateTime end,
+    required TransactionType txType,
+    required ProductType productType,
+  }) async {
+    final txSnapshot = await _db
+        .collection('transactions')
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end))
+        .where('type', isEqualTo: txType.name)
+        .get();
+
+    Map<String, double> details = {};
+    for (var doc in txSnapshot.docs) {
+      final items = (doc.data()['items'] as List? ?? []);
+      for (var i in items) {
+        if (i['product_type'] == productType.name) {
+          double qty = (i['quantity'] ?? 0).toDouble();
+          String name = i['product_name'] ?? 'Không tên';
+          details[name] = (details[name] ?? 0) + qty;
+        }
+      }
+    }
+    return details;
+  }
+
   // --- EXPORT ---
   Future<void> exportStockToExcel() async {
     final excel = Excel.createExcel();
