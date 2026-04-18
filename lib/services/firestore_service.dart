@@ -1,4 +1,8 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/product_model.dart';
 import '../models/supplier_model.dart';
 import '../models/transaction_model.dart';
@@ -346,7 +350,7 @@ class FirestoreService {
 
   Future<void> restoreTransaction(ActivityLog log) async {
     if (log.extraData == null) return;
-    
+
     final transaction = TransactionModel.fromMap(log.extraData!);
     final batch = _db.batch();
 
@@ -397,5 +401,41 @@ class FirestoreService {
         'totalStock': totalStock,
       };
     });
+  }
+
+  // --- EXPORT ---
+  Future<void> exportStockToExcel() async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Tồn kho'];
+    excel.delete('Sheet1');
+
+    // Header
+    sheet.appendRow([
+      TextCellValue('Tên sản phẩm'),
+      TextCellValue('Loại'),
+      TextCellValue('Số lượng'),
+      TextCellValue('Đơn vị'),
+    ]);
+
+    final productsSnapshot = await _db.collection('products').get();
+    for (var doc in productsSnapshot.docs) {
+      final p = Product.fromFirestore(doc);
+      sheet.appendRow([
+        TextCellValue(p.name),
+        TextCellValue(p.type == ProductType.dong ? 'Đà Nẵng' : 'Nội bộ'),
+        DoubleCellValue(p.stock),
+        TextCellValue(p.unit),
+      ]);
+    }
+
+    final directory = await getTemporaryDirectory();
+    final filePath = '${directory.path}/bao_cao_ton_kho.xlsx';
+    final fileBytes = excel.save();
+
+    if (fileBytes != null) {
+      final file = File(filePath);
+      await file.writeAsBytes(fileBytes);
+      await Share.shareXFiles([XFile(filePath)], text: 'Báo cáo tồn kho');
+    }
   }
 }

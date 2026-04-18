@@ -3,11 +3,21 @@ import 'package:intl/intl.dart';
 import '../models/activity_log_model.dart';
 import '../services/firestore_service.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
-  void _showSettings(BuildContext context, FirestoreService service) async {
-    int currentDays = await service.getRetentionDays();
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final FirestoreService _service = FirestoreService();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  LogType? _selectedType;
+
+  void _showSettings(BuildContext context) async {
+    int currentDays = await _service.getRetentionDays();
     if (!context.mounted) return;
 
     showDialog(
@@ -52,7 +62,7 @@ class HistoryScreen extends StatelessWidget {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    await service.updateRetentionDays(selectedDays);
+                    await _service.updateRetentionDays(selectedDays);
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text('Lưu'),
@@ -67,7 +77,6 @@ class HistoryScreen extends StatelessWidget {
 
   void _confirmRestore(
     BuildContext context,
-    FirestoreService service,
     ActivityLog log,
   ) {
     showDialog(
@@ -84,7 +93,7 @@ class HistoryScreen extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                await service.restoreTransaction(log);
+                await _service.restoreTransaction(log);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Khôi phục thành công')),
@@ -92,9 +101,9 @@ class HistoryScreen extends StatelessWidget {
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Lỗi khôi phục: $e')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Lỗi khôi phục: $e')),
+                  );
                 }
               }
             },
@@ -107,80 +116,150 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final FirestoreService service = FirestoreService();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Lịch Sử Hoạt Động'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () => _showSettings(context, service),
+            onPressed: () => _showSettings(context),
             tooltip: 'Cài đặt xóa lịch sử',
           ),
         ],
       ),
-      body: StreamBuilder<List<ActivityLog>>(
-        stream: service.getLogs(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Center(child: Text('Lỗi tải lịch sử'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final logs = snapshot.data ?? [];
-
-          if (logs.isEmpty) {
-            return const Center(
-              child: Text('Chưa có hoạt động nào được ghi lại'),
-            );
-          }
-
-          return ListView.separated(
-            itemCount: logs.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final log = logs[index];
-              final dateStr = DateFormat(
-                'dd/MM/yyyy HH:mm',
-              ).format(log.timestamp);
-
-              final bool canRestore =
-                  log.type == LogType.transaction && log.extraData != null;
-
-              return ListTile(
-                leading: _buildLeadingIcon(log.type),
-                title: Text(
-                  log.action,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(10.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm lịch sử...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
+                    onChanged: (val) =>
+                        setState(() => _searchQuery = val.toLowerCase()),
+                  ),
                 ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(log.details),
-                    const SizedBox(height: 4),
-                    Text(
-                      dateStr,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                const SizedBox(width: 10),
+                DropdownButton<LogType?>(
+                  value: _selectedType,
+                  hint: const Text('Tất cả'),
+                  onChanged: (val) => setState(() => _selectedType = val),
+                  items: [
+                    const DropdownMenuItem(value: null, child: Text('Tất cả')),
+                    ...LogType.values.map(
+                      (type) => DropdownMenuItem(
+                        value: type,
+                        child: Text(_getTypeLabel(type)),
+                      ),
                     ),
                   ],
                 ),
-                trailing: canRestore
-                    ? IconButton(
-                        icon: const Icon(Icons.restore, color: Colors.blue),
-                        onPressed: () => _confirmRestore(context, service, log),
-                        tooltip: 'Khôi phục phiếu',
+              ],
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<List<ActivityLog>>(
+              stream: _service.getLogs(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Lỗi tải lịch sử'));
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                var logs = snapshot.data ?? [];
+
+                if (_selectedType != null) {
+                  logs = logs.where((l) => l.type == _selectedType).toList();
+                }
+
+                if (_searchQuery.isNotEmpty) {
+                  logs = logs
+                      .where(
+                        (l) =>
+                            l.action.toLowerCase().contains(_searchQuery) ||
+                            l.details.toLowerCase().contains(_searchQuery),
                       )
-                    : null,
-                isThreeLine: true,
-              );
-            },
-          );
-        },
+                      .toList();
+                }
+
+                if (logs.isEmpty) {
+                  return const Center(
+                    child: Text('Không tìm thấy hoạt động nào'),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: logs.length,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final log = logs[index];
+                    final dateStr = DateFormat(
+                      'dd/MM/yyyy HH:mm',
+                    ).format(log.timestamp);
+
+                    final bool canRestore =
+                        log.type == LogType.transaction && log.extraData != null;
+
+                    return ListTile(
+                      leading: _buildLeadingIcon(log.type),
+                      title: Text(
+                        log.action,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(log.details),
+                          const SizedBox(height: 4),
+                          Text(
+                            dateStr,
+                            style:
+                                TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          ),
+                        ],
+                      ),
+                      trailing: canRestore
+                          ? IconButton(
+                              icon: const Icon(Icons.restore, color: Colors.blue),
+                              onPressed: () => _confirmRestore(context, log),
+                              tooltip: 'Khôi phục phiếu',
+                            )
+                          : null,
+                      isThreeLine: true,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  String _getTypeLabel(LogType type) {
+    switch (type) {
+      case LogType.product:
+        return 'Sản phẩm';
+      case LogType.transaction:
+        return 'Giao dịch';
+      case LogType.supplier:
+        return 'Nhà CC';
+      case LogType.system:
+        return 'Hệ thống';
+    }
+  }
   }
 
   Widget _buildLeadingIcon(LogType type) {
