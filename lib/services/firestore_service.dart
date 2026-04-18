@@ -395,6 +395,13 @@ class FirestoreService {
             .where((p) => p.type == ProductType.noiBo)
             .length;
 
+        double totalQtyDong = products
+            .where((p) => p.type == ProductType.dong)
+            .fold(0, (sum, p) => sum + p.stock);
+        double totalQtyNoiBo = products
+            .where((p) => p.type == ProductType.noiBo)
+            .fold(0, (sum, p) => sum + p.stock);
+
         // Tính tổng xuất hàng Đà Nẵng trong tháng này
         final now = DateTime.now();
         final firstDayOfMonth = DateTime(now.year, now.month, 1);
@@ -432,6 +439,8 @@ class FirestoreService {
         return {
           'countDong': countDong,
           'countNoiBo': countNoiBo,
+          'totalQtyDong': totalQtyDong,
+          'totalQtyNoiBo': totalQtyNoiBo,
           'monthExportDong': monthExportDong,
           'dongExportDetails': dongExportDetails,
         };

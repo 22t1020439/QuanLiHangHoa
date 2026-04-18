@@ -43,7 +43,13 @@ class HomeScreen extends StatelessWidget {
           }
           final stats =
               snapshot.data ??
-              {'countDong': 0, 'countNoiBo': 0, 'monthExportDong': 0.0};
+              {
+                'countDong': 0,
+                'countNoiBo': 0,
+                'totalQtyDong': 0.0,
+                'totalQtyNoiBo': 0.0,
+                'monthExportDong': 0.0,
+              };
 
           if (stats.containsKey('error')) {
             return Center(child: Text('Lỗi hệ thống: ${stats['error']}'));
@@ -79,13 +85,13 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     _buildStatCard(
                       'Sản phẩm Đà Nẵng',
-                      stats['countDong'].toString(),
+                      '${stats['countDong']} loại\n(${stats['totalQtyDong']} SP)',
                       Icons.inventory,
                       Colors.blue,
                     ),
                     _buildStatCard(
                       'Sản phẩm Nội Bộ',
-                      stats['countNoiBo'].toString(),
+                      '${stats['countNoiBo']} loại\n(${stats['totalQtyNoiBo']} SP)',
                       Icons.inventory_2,
                       Colors.green,
                     ),
@@ -328,8 +334,9 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 value,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),

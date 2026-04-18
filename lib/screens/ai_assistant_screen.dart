@@ -17,8 +17,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
   final List<Map<String, String>> _messages = [
     {
       'role': 'assistant',
-      'text': 'Chào bạn! Tôi là trợ lý ảo Dã Viên. Tôi có thể giúp bạn xem thống kê hàng hóa, kiểm tra tồn kho hoặc báo cáo xuất nhập. Bạn muốn hỏi gì không?'
-    }
+      'text':
+          'Chào bạn! Tôi là trợ lý ảo Dã Viên. Tôi có thể giúp bạn xem thống kê hàng hóa, kiểm tra tồn kho hoặc báo cáo xuất nhập. Bạn muốn hỏi gì không?',
+    },
   ];
   bool _isLoading = false;
   final FirestoreService _service = FirestoreService();
@@ -39,19 +40,41 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
 
     try {
       if (q.contains('xuất') && (q.contains('đà nẵng') || q.contains('đn'))) {
-        response = await _handleStatsQuery(q, TransactionType.export, ProductType.dong);
+        response = await _handleStatsQuery(
+          q,
+          TransactionType.export,
+          ProductType.dong,
+        );
       } else if (q.contains('xuất') && q.contains('nội bộ')) {
-        response = await _handleStatsQuery(q, TransactionType.export, ProductType.noiBo);
-      } else if (q.contains('nhập') && (q.contains('đà nẵng') || q.contains('đn'))) {
-        response = await _handleStatsQuery(q, TransactionType.import, ProductType.dong);
+        response = await _handleStatsQuery(
+          q,
+          TransactionType.export,
+          ProductType.noiBo,
+        );
+      } else if (q.contains('nhập') &&
+          (q.contains('đà nẵng') || q.contains('đn'))) {
+        response = await _handleStatsQuery(
+          q,
+          TransactionType.import,
+          ProductType.dong,
+        );
       } else if (q.contains('nhập') && q.contains('nội bộ')) {
-        response = await _handleStatsQuery(q, TransactionType.import, ProductType.noiBo);
-      } else if (q.contains('sắp hết') || q.contains('cảnh báo') || q.contains('tồn kho thấp')) {
+        response = await _handleStatsQuery(
+          q,
+          TransactionType.import,
+          ProductType.noiBo,
+        );
+      } else if (q.contains('sắp hết') ||
+          q.contains('cảnh báo') ||
+          q.contains('tồn kho thấp')) {
         response = await _handleLowStockQuery();
-      } else if (q.contains('tổng tồn') || q.contains('có bao nhiêu')) {
-        response = await _handleTotalStockQuery();
+      } else if (q.contains('tổng') ||
+          q.contains('bao nhiêu') ||
+          q.contains('tồn kho')) {
+        response = await _handleTotalStockQuery(q);
       } else {
-        response = "Xin lỗi, tôi chưa hiểu yêu cầu của bạn. Bạn có thể hỏi ví dụ: 'Lượng hàng xuất Đà Nẵng tháng 3/2026' hoặc 'Sản phẩm nào sắp hết hàng?'";
+        response =
+            "Xin lỗi, tôi chưa hiểu yêu cầu của bạn. Bạn có thể hỏi ví dụ: 'Lượng hàng xuất Đà Nẵng tháng 3/2026', 'Tổng số lượng hàng Đà Nẵng' hoặc 'Sản phẩm nào sắp hết hàng?'";
       }
     } catch (e) {
       response = "Có lỗi xảy ra khi truy vấn dữ liệu: $e";
@@ -61,11 +84,15 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     setState(() => _isLoading = false);
   }
 
-  Future<String> _handleStatsQuery(String q, TransactionType txType, ProductType pType) async {
+  Future<String> _handleStatsQuery(
+    String q,
+    TransactionType txType,
+    ProductType pType,
+  ) async {
     // Regex tìm tháng/năm
     final monthRegex = RegExp(r'tháng (\d{1,2})');
     final yearRegex = RegExp(r'năm (\d{4})|(\d{4})');
-    
+
     int month = DateTime.now().month;
     int year = DateTime.now().year;
 
@@ -93,13 +120,14 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     }
 
     double total = stats.values.reduce((a, b) => a + b);
-    String res = "Thống kê ${txType == TransactionType.export ? "xuất" : "nhập"} hàng ${pType == ProductType.dong ? "Đà Nẵng" : "Nội bộ"} tháng $month/$year:\n";
+    String res =
+        "Thống kê ${txType == TransactionType.export ? "xuất" : "nhập"} hàng ${pType == ProductType.dong ? "Đà Nẵng" : "Nội bộ"} tháng $month/$year:\n";
     res += "- Tổng số lượng: $total\n";
     res += "- Chi tiết từng món:\n";
     stats.forEach((name, qty) {
       res += "  + $name: $qty\n";
     });
-    
+
     return res;
   }
 
@@ -107,21 +135,35 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
     // Giả sử ngưỡng thấp là 10 (có thể lấy từ Firestore nếu có)
     final snapshot = await _service.getProducts(ProductType.dong).first;
     final snapshot2 = await _service.getProducts(ProductType.noiBo).first;
-    
-    final lowStock = [...snapshot, ...snapshot2].where((p) => p.stock <= 10).toList();
-    
-    if (lowStock.isEmpty) return "Hiện tại không có sản phẩm nào sắp hết hàng (tất cả đều > 10).";
-    
+
+    final lowStock = [
+      ...snapshot,
+      ...snapshot2,
+    ].where((p) => p.stock <= 10).toList();
+
+    if (lowStock.isEmpty)
+      return "Hiện tại không có sản phẩm nào sắp hết hàng (tất cả đều > 10).";
+
     String res = "Danh sách sản phẩm sắp hết hàng (<= 10):\n";
     for (var p in lowStock) {
-      res += "- ${p.name}: ${p.stock} ${p.unit} (${p.type == ProductType.dong ? "Đà Nẵng" : "Nội bộ"})\n";
+      res +=
+          "- ${p.name}: ${p.stock} ${p.unit} (${p.type == ProductType.dong ? "Đà Nẵng" : "Nội bộ"})\n";
     }
     return res;
   }
 
-  Future<String> _handleTotalStockQuery() async {
+  Future<String> _handleTotalStockQuery(String q) async {
     final stats = await _service.getDashboardStats().first;
-    return "Hiện tại hệ thống đang quản lý:\n- ${stats['countDong']} mặt hàng Đà Nẵng\n- ${stats['countNoiBo']} mặt hàng Nội Bộ.";
+
+    if (q.contains('đà nẵng') || q.contains('đn')) {
+      return "Thống kê hàng Đà Nẵng:\n- Số loại sản phẩm: ${stats['countDong']}\n- Tổng số lượng tồn: ${stats['totalQtyDong']}";
+    } else if (q.contains('nội bộ')) {
+      return "Thống kê hàng Nội Bộ:\n- Số loại sản phẩm: ${stats['countNoiBo']}\n- Tổng số lượng tồn: ${stats['totalQtyNoiBo']}";
+    }
+
+    double grandTotal =
+        (stats['totalQtyDong'] ?? 0.0) + (stats['totalQtyNoiBo'] ?? 0.0);
+    return "Tổng quan hệ thống:\n- Hàng Đà Nẵng: ${stats['countDong']} loại (${stats['totalQtyDong']} SP)\n- Hàng Nội Bộ: ${stats['countNoiBo']} loại (${stats['totalQtyNoiBo']} SP)\n- Tổng tồn kho: $grandTotal sản phẩm.";
   }
 
   @override
@@ -143,21 +185,31 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
                 final msg = _messages[index];
                 final isAssistant = msg['role'] == 'assistant';
                 return Align(
-                  alignment: isAssistant ? Alignment.centerLeft : Alignment.centerRight,
+                  alignment: isAssistant
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 5),
                     padding: const EdgeInsets.all(12),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75,
+                    ),
                     decoration: BoxDecoration(
                       color: isAssistant ? Colors.grey[200] : Colors.indigo,
                       borderRadius: BorderRadius.circular(15).copyWith(
-                        bottomLeft: isAssistant ? const Radius.circular(0) : const Radius.circular(15),
-                        bottomRight: isAssistant ? const Radius.circular(15) : const Radius.circular(0),
+                        bottomLeft: isAssistant
+                            ? const Radius.circular(0)
+                            : const Radius.circular(15),
+                        bottomRight: isAssistant
+                            ? const Radius.circular(15)
+                            : const Radius.circular(0),
                       ),
                     ),
                     child: Text(
                       msg['text']!,
-                      style: TextStyle(color: isAssistant ? Colors.black87 : Colors.white),
+                      style: TextStyle(
+                        color: isAssistant ? Colors.black87 : Colors.white,
+                      ),
                     ),
                   ),
                 );
@@ -173,7 +225,9 @@ class _AIAssistantScreenState extends State<AIAssistantScreen> {
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5)],
+              boxShadow: [
+                BoxShadow(color: Colors.grey.withOpacity(0.2), blurRadius: 5),
+              ],
             ),
             child: Row(
               children: [
